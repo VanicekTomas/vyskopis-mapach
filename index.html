@@ -204,7 +204,7 @@
     const byId = id => document.getElementById(id);
     const inputs = ["fullname","email","objekt1","obec1","vrchol2"];
     const storageKey = "vyskopis-form-v2";
-  
+
     function saveToLocal(){
       const data = Object.fromEntries(inputs.map(id => [id, byId(id).value.trim()]));
       localStorage.setItem(storageKey, JSON.stringify(data));
@@ -216,19 +216,19 @@
       }catch(e){}
     }
     function clearLocal(){ localStorage.removeItem(storageKey); }
-  
+
     // ---------- Inicializace ----------
     document.addEventListener('DOMContentLoaded', () => {
       byId('year').textContent = new Date().getFullYear();
       loadFromLocal();
       inputs.forEach(id => byId(id).addEventListener('input', saveToLocal));
-  
+
       // Ovládání náhledu / modalu
       byId('mapThumb').addEventListener('click', openModal);
       byId('openMapBtn').addEventListener('click', openModal);
       byId('closeMapBtn').addEventListener('click', closeModal);
       byId('resetViewBtn').addEventListener('click', resetView);
-  
+
       // Ovládání formuláře
       byId('saveBtn').addEventListener('click', () => { saveToLocal(); toastOK('Odpovědi byly uloženy do zařízení.'); });
       byId('resetBtn').addEventListener('click', () => {
@@ -239,29 +239,28 @@
         }
       });
       byId('sendBtn').addEventListener('click', handleSend);
-  
+
       // Inicializace pan/zoom
       setupPanZoom();
     });
-  
+
     // ---------- Validace a odeslání ----------
     function handleSend(){
       const data = Object.fromEntries(inputs.map(id => [id, byId(id).value.trim()]));
       const missing = [];
       if(!data.fullname) missing.push('Jméno a příjmení');
       if(!data.objekt1) missing.push('Název objektu (Úloha 1)');
-      if(!data.obec1) missing.push('Název obce (Úloha 1)');
+      if(!data.obec1)   missing.push('Název obce (Úloha 1)');
       if(!data.vrchol2) missing.push('Název vrcholu (Úloha 2)');
       if(missing.length){ return toastERR('Chybí vyplnit: '+missing.join(', ')); }
-  
+
       const email = data.email;
       if(email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
         return toastERR('Zadejte platný e-mail nebo pole ponechte prázdné.');
       }
-  
+
       saveToLocal();
-  
-      // Výchozí řešení – mailto:
+
       const to = 'tomas.vanicek@upol.cz';
       const subject = encodeURIComponent('VÝŠKOPIS – odevzdané odpovědi');
       const body = encodeURIComponent(
@@ -271,20 +270,18 @@
         `\nÚloha 2:\n  Zvolený vrchol: ${data.vrchol2}\n`+
         `\nOdesláno: ${new Date().toLocaleString('cs-CZ')}\n`
       );
-      const mailtoURL = `mailto:${to}?subject=${subject}&body=${body}`;
-      window.location.href = mailtoURL;
+      window.location.href = `mailto:${to}?subject=${subject}&body=${body}`;
       toastOK('Odpovědi byly připraveny k odeslání v e-mailovém klientu.');
     }
-  
+
     function toastOK(msg){ const el = byId('okMsg'); el.textContent = msg; el.style.display='block'; const er = byId('errMsg'); er.style.display='none'; }
     function toastERR(msg){ const el = byId('errMsg'); el.textContent = msg; el.style.display='block'; const ok = byId('okMsg'); ok.style.display='none'; }
-  
+
     // ---------- Modal ----------
     function openModal(){
       const modal = byId('mapModal');
       const big   = byId('bigMap');
       const thumb = byId('thumbImg');
-      // Načti velký obrázek až při otevření
       const fullSrc = (thumb && thumb.dataset.full) ? thumb.dataset.full : 'Vzor_Boskovice.jpg';
       if(!big.getAttribute('src')){
         big.src = fullSrc;
@@ -295,86 +292,95 @@
       modal.showModal();
     }
     function closeModal(){ byId('mapModal').close(); }
-  
+
     // ---------- Pan/Zoom s kotevním bodem gesta ----------
     const state = {
       x:0, y:0, scale:1,
       minScale: 1, maxScale: 8,
       pointers:new Map(),
-      startX:0, startY:0,
-      startScale:1, startDist:0,
-      anchorX:0, anchorY:0,     // kotevní bod pinch gesta ve viewport souřadnicích
+      startX:0, startY:0,             // pro jedno-prstý pan
+      startScale:1, startDist:0,      // pro pinch
       imgW:0, imgH:0, vw:0, vh:0
     };
-  
+
     function setupPanZoom(){
       const wrap = byId('canvasWrap');
       const pz   = byId('pz');
-  
+
       const apply = () => {
         bound();
         pz.style.transform = `translate(${state.x}px, ${state.y}px) scale(${state.scale})`;
       };
-  
-      const getDistance = () => {
-        const pts = Array.from(state.pointers.values());
-        if(pts.length < 2) return 0;
-        const [a,b] = pts; return Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY);
-      };
-  
+
+      const getTwoPointers = () => Array.from(state.pointers.values()).slice(0,2);
+      const distance = (a,b) => Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY);
+
       wrap.addEventListener('pointerdown', (e)=>{
         wrap.setPointerCapture(e.pointerId);
         state.pointers.set(e.pointerId, e);
+
+        // pro jednoprstý pan
         state.startX = e.clientX - state.x;
         state.startY = e.clientY - state.y;
+
         if(state.pointers.size === 2){
-          state.startDist  = getDistance();
+          const [p1,p2] = getTwoPointers();
+          state.startDist  = distance(p1,p2);
           state.startScale = state.scale;
-          const rect = wrap.getBoundingClientRect();
-          const pts  = Array.from(state.pointers.values());
-          state.anchorX = ((pts[0].clientX + pts[1].clientX) / 2) - rect.left;
-          state.anchorY = ((pts[0].clientY + pts[1].clientY) / 2) - rect.top;
         }
       });
-  
+
       wrap.addEventListener('pointermove', (e)=>{
         if(!state.pointers.has(e.pointerId)) return;
         state.pointers.set(e.pointerId, e);
-  
+
         if(state.pointers.size === 1){
-          // pan
+          // pan jedním prstem
           state.x = e.clientX - state.startX;
           state.y = e.clientY - state.startY;
           apply();
-        } else if(state.pointers.size === 2){
-          // pinch zoom – kolem fixního kotevního bodu
-          const dist = getDistance();
-          if(state.startDist){
-            const factor   = dist / state.startDist;
-            const newScale = clamp(state.startScale * factor, state.minScale, state.maxScale);
-            setScaleAt(state.anchorX, state.anchorY, newScale);
-            apply();
-          }
+        } else if(state.pointers.size >= 2){
+          // pinch + souběžný posun – anchor = aktuální střed prstů
+          const rect = wrap.getBoundingClientRect();
+          const [p1,p2] = getTwoPointers();
+          const midX = (p1.clientX + p2.clientX)/2 - rect.left;
+          const midY = (p1.clientY + p2.clientY)/2 - rect.top;
+
+          const dist = distance(p1,p2);
+          if(!state.startDist){ state.startDist = dist; state.startScale = state.scale; }
+
+          const newScale = clamp(state.startScale * (dist / state.startDist), state.minScale, state.maxScale);
+          setScaleAt(midX, midY, newScale); // zajistí i přirozený posun podle pohybu středu prstů
+          apply();
         }
       });
-  
-      const release = (e)=>{ state.pointers.delete(e.pointerId); };
+
+      const release = (e)=>{
+        state.pointers.delete(e.pointerId);
+        // když zůstal jeden prst, znovu zarovnej startX/startY pro plynulé pokračování panu
+        if(state.pointers.size === 1){
+          const p = state.pointers.values().next().value;
+          state.startX = p.clientX - state.x;
+          state.startY = p.clientY - state.y;
+        }
+        // reset pinch baseline
+        if(state.pointers.size < 2){ state.startDist = 0; }
+      };
       wrap.addEventListener('pointerup', release);
       wrap.addEventListener('pointercancel', release);
-  
-      // Zoom kolečkem – kolem kurzoru
+
+      // Kolečko myši – anchor = kurzor
       wrap.addEventListener('wheel', (e)=>{
         e.preventDefault();
         const rect = wrap.getBoundingClientRect();
         const ax = e.clientX - rect.left;
         const ay = e.clientY - rect.top;
-        const factor   = e.deltaY < 0 ? 1.1 : 0.9;
-        const newScale = state.scale * factor;
-        setScaleAt(ax, ay, newScale);
+        const factor = Math.exp((-e.deltaY) * 0.0015); // plynulé
+        setScaleAt(ax, ay, state.scale * factor);
         apply();
       }, {passive:false});
-  
-      // Dvojité klepnutí – zoom kolem místa klepnutí
+
+      // Double-tap – anchor = kliknuté místo
       let lastTap = 0;
       wrap.addEventListener('click', (e)=>{
         const now = Date.now();
@@ -382,23 +388,22 @@
           const rect = wrap.getBoundingClientRect();
           const ax = e.clientX - rect.left;
           const ay = e.clientY - rect.top;
-          const targetScale = state.scale < state.minScale*1.8 ? Math.min(state.minScale*2, state.maxScale) : state.minScale;
-          setScaleAt(ax, ay, targetScale);
+          const target = state.scale < state.minScale*1.8 ? Math.min(state.minScale*2, state.maxScale) : state.minScale;
+          setScaleAt(ax, ay, target);
           apply();
         }
         lastTap = now;
       });
-  
-      // Reflow při změně velikosti okna
+
+      // Reflow při změně velikosti
       window.addEventListener('resize', ()=>{ if(byId('mapModal').open) fitToScreen(false); });
-  
-      // Uložit apply pro reset
+
       window.__pzApply = apply;
     }
-  
+
     function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
-  
-    // Klíčová funkce: změní měřítko kolem kotevního bodu (ax, ay) ve viewport souřadnicích
+
+    // Změna měřítka kolem kotevního bodu (ax, ay) ve viewport souřadnicích
     function setScaleAt(ax, ay, newScale){
       newScale = clamp(newScale, state.minScale, state.maxScale);
       const px = (ax - state.x) / state.scale;
@@ -407,33 +412,32 @@
       state.x = ax - px * state.scale;
       state.y = ay - py * state.scale;
     }
-  
+
     function measure(){
       const wrap = byId('canvasWrap');
       const img  = byId('bigMap');
       state.vw = wrap.clientWidth; state.vh = wrap.clientHeight;
       state.imgW = img.naturalWidth || img.width; state.imgH = img.naturalHeight || img.height;
     }
-  
+
     function fitToScreen(resetScale=true){
       measure();
       const s = Math.min(state.vw / state.imgW, state.vh / state.imgH);
       state.minScale = s; if(resetScale) state.scale = s;
-      // centrovat
       state.x = (state.vw - state.imgW*state.scale)/2;
       state.y = (state.vh - state.imgH*state.scale)/2;
       if(window.__pzApply) window.__pzApply();
     }
-  
+
     function bound(){
-      // Udržuj obraz v obdélníku viewportu
       const w = state.imgW * state.scale;
       const h = state.imgH * state.scale;
       if(w <= state.vw){ state.x = (state.vw - w)/2; } else { state.x = clamp(state.x, state.vw - w, 0); }
       if(h <= state.vh){ state.y = (state.vh - h)/2; } else { state.y = clamp(state.y, state.vh - h, 0); }
     }
-  
+
     function resetView(){ fitToScreen(); }
-  </script>  
+  </script>
+
 </body>
 </html>
