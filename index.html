@@ -117,9 +117,9 @@
           <button class="btn ghost" id="openMapBtn" type="button">Otevřít mapu</button>
         </div>
         <figure class="map-thumb" id="mapThumb">
-          <img src="Vzor_Boskovice.jpg" alt="Topografická mapa – vzor Boskovice" />
+          <!-- Náhled zrychlen: zkuste nahrát menší náhled Vzor_Boskovice_thumb.jpg (~1200px). Pokud není k dispozici, spadne to na plnou verzi. -->
+          <img id="thumbImg" src="Vzor_Boskovice_thumb.jpg" data-full="Vzor_Boskovice.jpg" alt="Topografická mapa – vzor Boskovice (náhled)" loading="lazy" decoding="async" fetchpriority="low" onerror="this.onerror=null; this.src='Vzor_Boskovice.jpg'" />
         </figure>
-        <figcaption class="map-caption">Soubor <code>Vzor_Boskovice.jpg</code> umístěte do stejné složky jako tento soubor <code>index.html</code>.</figcaption>
       </section>
 
       <!-- Úloha 1 -->
@@ -173,12 +173,12 @@
         </div>
         <div class="notice ok" id="okMsg">Odpovědi byly připraveny k odeslání e‑mailem. Zkontrolujte prosím vaši poštu.</div>
         <div class="notice err" id="errMsg"></div>
-        <p class="hint" style="margin-top:10px">Pozn.: Stránka je určena pro GitHub Pages (statický web). Výchozí odeslání probíhá přes e‑mailový klient (<code>mailto:</code>). Pro plně automatické odeslání lze snadno připojit službu formulářového backendu – viz komentáře v kódu.</p>
+        
       </section>
     </main>
 
     <footer>
-      <div>© <span id="year"></span> Výukový materiál – VÝŠKOPIS NA MAPÁCH</div>
+      <div>© <span id="year"></span> Navrhl a vytvořil Tomáš Vaníček</div>
     </footer>
   </div>
 
@@ -193,7 +193,7 @@
     </div>
     <div class="canvas-wrap" id="canvasWrap">
       <div class="panzoom" id="pz">
-        <img id="bigMap" src="Vzor_Boskovice.jpg" alt="Topografická mapa – vzor Boskovice, plné zobrazení" />
+        <img id="bigMap" alt="Topografická mapa – vzor Boskovice, plné zobrazení" />
       </div>
     </div>
   </dialog>
@@ -286,7 +286,19 @@
     function toastERR(msg){ const el = byId('errMsg'); el.textContent = msg; el.style.display='block'; const ok = byId('okMsg'); ok.style.display='none'; }
 
     // ---------- Modal ----------
-    function openModal(){ byId('mapModal').showModal(); setTimeout(resetView, 0); }
+    function openModal(){
+      const modal = byId('mapModal');
+      const big = byId('bigMap');
+      const thumb = byId('thumbImg');
+      const fullSrc = (thumb && thumb.dataset.full) ? thumb.dataset.full : 'Vzor_Boskovice.jpg';
+      if(!big.getAttribute('src')){
+        big.src = fullSrc;
+        big.onload = () => { fitToScreen(); };
+      } else {
+        setTimeout(fitToScreen, 0);
+      }
+      modal.showModal();
+    }
     function closeModal(){ byId('mapModal').close(); }
 
     // ---------- Jednoduchý pan/zoom s Pointer Events ----------
@@ -354,7 +366,21 @@
       window.__pzApply = apply;
     }
 
-    function resetView(){ state.x = 0; state.y = 0; state.scale = 1; if(window.__pzApply) window.__pzApply(); }
+    function resetView(){ fitToScreen(); }
+    function fitToScreen(){
+      const wrap = byId('canvasWrap');
+      const img = byId('bigMap');
+      if(!wrap || !img) return;
+      const vw = wrap.clientWidth;
+      const vh = wrap.clientHeight;
+      const iw = img.naturalWidth || img.width || 1;
+      const ih = img.naturalHeight || img.height || 1;
+      const s = Math.min(vw/iw, vh/ih);
+      state.scale = s; state.minScale = s;
+      state.x = (vw - iw*s)/2;
+      state.y = (vh - ih*s)/2;
+      if(window.__pzApply) window.__pzApply();
+    }
   </script>
 </body>
 </html>
